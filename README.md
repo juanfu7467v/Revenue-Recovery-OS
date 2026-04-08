@@ -171,5 +171,5 @@ La documentación interactiva de la API (Swagger UI) estará en `http://localhos
 
 ---
 
-**Autor:** Manus AI
+**Autor:** Equipo infraestructura masitaprex 
 **Fecha:** 08 de abril de 2026
