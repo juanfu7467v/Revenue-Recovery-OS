@@ -4,3 +4,7 @@ google-cloud-firestore==2.11.0
 firebase-admin==6.3.0
 cryptography==42.0.5
 python-dotenv==1.0.1
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+stripe==8.12.0
+python-multipart==0.0.9
