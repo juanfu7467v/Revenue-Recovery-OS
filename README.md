@@ -78,5 +78,5 @@ El sistema utiliza una lógica de recuperación genérica (`process_generic_reco
 2.  **Desplegar:** `fly deploy`.
 
 ---
-**Autor:** Manus AI
+**Autor:** Inge. Juan Carlos 
 **Estado:** Global, Escalable y Listo para Producción
