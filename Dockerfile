@@ -9,6 +9,8 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY . .
 
 ENV PYTHONPATH=/app
-ENV PORT=8000
+# Default port for Fly.io is often 8080
+ENV PORT=8080
 
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Use the PORT environment variable in the command
+CMD ["sh", "-c", "uvicorn src.main:app --host 0.0.0.0 --port ${PORT}"]

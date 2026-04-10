@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter, Request, HTTPException, Header, BackgroundTasks
 from src.database.firestore import db
 from src.config import settings
@@ -49,13 +48,17 @@ async def stripe_webhook(request: Request, background_tasks: BackgroundTasks, st
 
     event_type = event.get("type")
     
-    # Guardar el evento para auditoría en recovery_events
-    event_id = event.get("id", f"evt_{datetime.utcnow().timestamp()}")
-    db.collection("recovery_events").document(event_id).set({
-        "event_type": event_type,
-        "payload": event,
-        "received_at": datetime.utcnow()
-    })
+    # Guardar el evento para auditoría en recovery_events si db está disponible
+    if db:
+        try:
+            event_id = event.get("id", f"evt_{datetime.utcnow().timestamp()}")
+            db.collection("recovery_events").document(event_id).set({
+                "event_type": event_type,
+                "payload": event,
+                "received_at": datetime.utcnow()
+            })
+        except Exception as e:
+            print(f"Error saving to Firestore (recovery_events): {e}")
 
     if event_type == "invoice.payment_failed":
         invoice_data = event["data"]["object"]
@@ -66,18 +69,22 @@ async def stripe_webhook(request: Request, background_tasks: BackgroundTasks, st
         
         org_id = invoice_data.get("metadata", {}).get("org_id", "default_org")
 
-        recovery_log = {
-            "org_id": org_id,
-            "invoice_id": invoice_id,
-            "customer_id": customer_id,
-            "amount": amount,
-            "currency": currency,
-            "status": "failed",
-            "retry_count": 0,
-            "created_at": datetime.utcnow(),
-            "next_retry_at": datetime.utcnow() + timedelta(days=1)
-        }
-        db.collection("recovery_logs").document(invoice_id).set(recovery_log)
+        if db:
+            try:
+                recovery_log = {
+                    "org_id": org_id,
+                    "invoice_id": invoice_id,
+                    "customer_id": customer_id,
+                    "amount": amount,
+                    "currency": currency,
+                    "status": "failed",
+                    "retry_count": 0,
+                    "created_at": datetime.utcnow(),
+                    "next_retry_at": datetime.utcnow() + timedelta(days=1)
+                }
+                db.collection("recovery_logs").document(invoice_id).set(recovery_log)
+            except Exception as e:
+                print(f"Error saving to Firestore (recovery_logs): {e}")
         
         # Procesar lógica pesada en segundo plano
         background_tasks.add_task(process_recovery_logic, event)
