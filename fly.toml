@@ -1,6 +1,9 @@
-# fly.toml app configuration file for crear-videos-subir-youtuve
+# fly.toml app configuration file generated for revenue-recovery-os on 2026-04-10T15:46:48Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
 
-app = 'crear-videos-subir-youtuve'
+app = 'revenue-recovery-os'
 primary_region = 'iad'
 
 [build]
@@ -8,18 +11,13 @@ primary_region = 'iad'
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = true
+  auto_stop_machines = 'stop'
   auto_start_machines = true
-  # Mantiene la máquina encendida por 2 horas tras inactividad para procesos largos
-  auto_stop_timeout = 7200 
   min_machines_running = 0
   processes = ['app']
 
-[processes]
-  app = "python main.py"
-
 [[vm]]
-  # Configuración optimizada: shared-cpu-2x y 4GB de RAM
+  memory = '1gb'
   cpu_kind = 'shared'
-  cpus = 2
-  memory_mb = 4096
+  cpus = 1
+  memory_mb = 1024
