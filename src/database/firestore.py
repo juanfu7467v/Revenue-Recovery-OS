@@ -7,6 +7,11 @@ def initialize_firebase():
     if not firebase_admin._apps:
         # Obtener variables de entorno
         fb_type = os.getenv("FIREBASE_TYPE", "service_account")
+        
+        # NORMALIZACIÓN: El SDK de Firebase requiere estrictamente "service_account"
+        if fb_type.lower() in ["cuenta_de_servicio", "service_account"]:
+            fb_type = "service_account"
+            
         project_id = os.getenv("FIREBASE_PROJECT_ID")
         private_key_id = os.getenv("FIREBASE_PRIVATE_KEY_ID")
         private_key = os.getenv("FIREBASE_PRIVATE_KEY")
@@ -18,12 +23,20 @@ def initialize_firebase():
         client_cert = os.getenv("FIREBASE_CLIENT_X509_CERT_URL")
         universe_domain = os.getenv("FIREBASE_UNIVERSE_DOMAIN", "googleapis.com")
 
-        # Limpieza de la clave privada (manejo de saltos de línea)
+        # Limpieza profunda de la clave privada
         if private_key:
-            # Si la clave viene con comillas literales al inicio/fin, las quitamos
-            private_key = private_key.strip('"').strip("'")
-            # Reemplazamos los \n literales por saltos de línea reales
+            # Eliminar espacios en blanco y comillas accidentales al inicio/fin
+            private_key = private_key.strip().strip('"').strip("'")
+            # Reemplazar los \n literales por saltos de línea reales
             private_key = private_key.replace("\\n", "\n")
+            
+            # Asegurar que la clave tenga el formato correcto de PEM
+            if "-----BEGIN PRIVATE KEY-----" in private_key and "-----END PRIVATE KEY-----" not in private_key:
+                print("WARNING: Private key seems truncated. Attempting to fix...")
+                # Si falta el cierre, lo añadimos (aunque esto suele fallar si faltan datos reales)
+                if not private_key.endswith("\n"):
+                    private_key += "\n"
+                private_key += "-----END PRIVATE KEY-----\n"
 
         # Construir el diccionario de configuración
         firebase_config = {
@@ -42,7 +55,7 @@ def initialize_firebase():
         
         # Depuración (sin mostrar la clave privada completa por seguridad)
         print(f"DEBUG: Initializing Firebase for project: {project_id}")
-        print(f"DEBUG: Firebase Type: {fb_type}")
+        print(f"DEBUG: Firebase Type (Normalized): {fb_type}")
         print(f"DEBUG: Client Email: {client_email}")
         
         # Verificar si las variables críticas están presentes
@@ -56,9 +69,9 @@ def initialize_firebase():
                 print("SUCCESS: Firebase initialized successfully.")
             except Exception as e:
                 print(f"ERROR: Failed to initialize Firebase with provided config: {e}")
+                # No lanzamos excepción para permitir que la app inicie aunque Firestore falle
                 return None
         else:
-            # Fallback a archivo local si no hay variables de entorno (Desarrollo local)
             print(f"WARNING: Missing environment variables: {', '.join(missing_fields)}")
             cred_path = os.getenv("FIREBASE_CREDENTIALS_PATH", "./firebase-adminsdk.json")
             if os.path.exists(cred_path):
@@ -80,4 +93,8 @@ def initialize_firebase():
         return None
 
 # Inicialización global
-db = initialize_firebase()
+try:
+    db = initialize_firebase()
+except Exception as e:
+    print(f"CRITICAL: Global Firebase initialization failed: {e}")
+    db = None
