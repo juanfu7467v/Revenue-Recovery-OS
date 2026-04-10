@@ -30,7 +30,26 @@ class RecoveryLogBase(BaseModel):
     next_retry_at: Optional[datetime] = None
     created_at: datetime = datetime.now()
 
+class BrandingSettings(BaseModel):
+    logo_url: Optional[str] = None
+    primary_color: str = "#3b82f6"  # Default blue
+    secondary_color: str = "#1e293b" # Default slate
+    tone: str = "professional"      # professional, friendly, urgent
+    company_name: Optional[str] = None
+
 class DashboardMetrics(BaseModel):
     recovered_amount: float
     reduction_in_collection_days: float
     accounts_at_risk: int
+    monthly_recovered: float = 0.0
+    recovery_rate: float = 0.0
+    active_recovery_campaigns: int = 0
+    message_summary: str = ""
+
+class PreDunningNotification(BaseModel):
+    customer_id: str
+    customer_email: str
+    card_last4: str
+    expiry_month: int
+    expiry_year: int
+    days_until_expiry: int

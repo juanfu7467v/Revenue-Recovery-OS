@@ -5,10 +5,39 @@ class DunningService:
     def __init__(self, user_id: str):
         self.user_id = user_id
 
+    async def _get_branding(self):
+        if not db:
+            return {}
+        org_doc = db.collection("organizations").document(self.user_id).get()
+        if org_doc.exists:
+            return org_doc.to_dict().get("branding", {})
+        return {}
+
     async def send_email(self, customer_email: str, invoice_id: str, amount: float):
-        # Lógica de envío de email (e.g., SendGrid)
-        print(f"Sending Dunning Email to {customer_email} for invoice {invoice_id}")
-        return {"status": "email_sent"}
+        branding = await self._get_branding()
+        company_name = branding.get("company_name", "Nuestra Empresa")
+        tone = branding.get("tone", "professional")
+        
+        # Lógica de personalización por tono
+        templates = {
+            "professional": f"Estimado cliente, le informamos que el pago de su factura {invoice_id} por ${amount} ha fallado.",
+            "friendly": f"¡Hola! Tuvimos un pequeño problema con el pago de tu factura {invoice_id}. No te preocupes, suele ser algo rápido de solucionar.",
+            "urgent": f"ATENCIÓN: El pago de su factura {invoice_id} ha fallado. Por favor actualice su método de pago inmediatamente para evitar la suspensión del servicio."
+        }
+        
+        message = templates.get(tone, templates["professional"])
+        
+        print(f"[{company_name}] Sending Dunning Email to {customer_email}: {message}")
+        return {"status": "email_sent", "branding_applied": True}
+
+    async def send_pre_dunning_notification(self, customer_email: str, card_last4: str, expiry_date: str):
+        branding = await self._get_branding()
+        company_name = branding.get("company_name", "Nuestra Empresa")
+        
+        message = f"Tu tarjeta terminada en {card_last4} vence pronto ({expiry_date}). Actualízala aquí para evitar interrupciones en el servicio."
+        
+        print(f"[{company_name}] Sending Pre-Dunning Notification to {customer_email}: {message}")
+        return {"status": "pre_dunning_sent"}
 
     async def send_whatsapp(self, customer_phone: str, invoice_id: str, amount: float):
         # Lógica de envío de WhatsApp (e.g., Twilio)

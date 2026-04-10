@@ -30,10 +30,21 @@ async def get_dashboard_metrics(user_id: str):
                 
         reduction_in_collection_days = total_collection_days / count_recovered if count_recovered > 0 else 0.0
         
+        # Nuevas métricas
+        monthly_recovered = recovered_amount # Simplificación para el demo
+        total_attempts = count_recovered + accounts_at_risk
+        recovery_rate = (count_recovered / total_attempts * 100) if total_attempts > 0 else 0.0
+        
+        message_summary = f"Este mes has recuperado ${monthly_recovered:,.2f} USD que dabas por perdidos"
+        
         return {
             "recovered_amount": recovered_amount,
             "reduction_in_collection_days": reduction_in_collection_days,
-            "accounts_at_risk": accounts_at_risk
+            "accounts_at_risk": accounts_at_risk,
+            "monthly_recovered": monthly_recovered,
+            "recovery_rate": recovery_rate,
+            "active_recovery_campaigns": accounts_at_risk,
+            "message_summary": message_summary
         }
     except Exception as e:
         print(f"Error fetching metrics from Firestore: {e}")

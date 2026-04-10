@@ -91,4 +91,21 @@ async def stripe_webhook(request: Request, background_tasks: BackgroundTasks, st
         
         return {"status": "success", "message": "Payment failure logged, recovery logic queued"}
 
+    elif event_type == "customer.subscription.updated":
+        # Lógica de Pre-Dunning: Detectar si el método de pago está por vencer
+        obj = event["data"]["object"]
+        org_id = obj.get("metadata", {}).get("org_id", "default_org")
+        
+        # Simulamos detección de tarjeta por vencer (basado en lógica de negocio)
+        # En una implementación real, extraeríamos datos del PaymentMethod asociado
+        customer_id = obj.get("customer")
+        customer_email = "cliente@ejemplo.com" # Placeholder
+        card_last4 = "4242" # Placeholder
+        expiry_date = "12/26" # Placeholder
+        
+        dunning = DunningService(org_id)
+        background_tasks.add_task(dunning.send_pre_dunning_notification, customer_email, card_last4, expiry_date)
+        
+        return {"status": "success", "message": "Pre-Dunning notification queued"}
+
     return {"status": "success", "message": "Event received"}
