@@ -1,0 +1,25 @@
+# fly.toml app configuration file for crear-videos-subir-youtuve
+
+app = 'crear-videos-subir-youtuve'
+primary_region = 'iad'
+
+[build]
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  # Mantiene la máquina encendida por 2 horas tras inactividad para procesos largos
+  auto_stop_timeout = 7200 
+  min_machines_running = 0
+  processes = ['app']
+
+[processes]
+  app = "python main.py"
+
+[[vm]]
+  # Configuración optimizada: shared-cpu-2x y 4GB de RAM
+  cpu_kind = 'shared'
+  cpus = 2
+  memory_mb = 4096
