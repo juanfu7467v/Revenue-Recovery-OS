@@ -4,8 +4,11 @@ from src.api.v1.schemas import DashboardMetrics
 
 router = APIRouter()
 
+from src.utils.auth import get_current_user
+
 @router.get("/metrics", response_model=DashboardMetrics)
-async def get_dashboard_metrics(user_id: str):
+async def get_dashboard_metrics(current_user: dict = Depends(get_current_user)):
+    user_id = current_user["user_id"]
     if not db:
         raise HTTPException(status_code=503, detail="Database connection not available. Please check Firebase configuration.")
     

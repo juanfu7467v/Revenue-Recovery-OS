@@ -22,21 +22,6 @@ Hemos transformado el sistema en una solución global compatible con múltiples 
 
 ---
 
-## 📈 Estrategia de Crecimiento por Fases
-
-Para asegurar una expansión sólida y escalable, el sistema se organiza en las siguientes fases:
-
-### 🔹 Fase 1: Startups y SaaS Globales
-*   **Stripe:** (Implementado) Enfoque en desarrolladores y startups de rápido crecimiento.
-
-### 🔹 Fase 2: E-commerce y Empresas Internacionales
-*   **PayPal / Adyen / Checkout.com:** (Integrado) Expansión hacia el mercado corporativo y comercio electrónico global.
-
-### 🔹 Fase 3: Dominio de Latinoamérica
-*   **Mercado Pago / PayU / Kushki:** (Integrado) Localización profunda para capturar el mercado de pagos en toda la región.
-
----
-
 ## 🛠️ Nuevos Endpoints de Webhooks
 Se han habilitado rutas modulares para recibir notificaciones de fallos de pago de los nuevos procesadores:
 *   `POST /api/v1/webhooks/processors/adyen`
@@ -57,11 +42,13 @@ Se han habilitado rutas modulares para recibir notificaciones de fallos de pago 
 
 ## Implementación Técnica de Producción
 
-### 1. Seguridad (Blindaje)
-*   **Auth Layer (JWT):** Todos los endpoints críticos están protegidos.
+### 1. Seguridad (Validación por Token)
+*   **Capa de Validación:** Se ha eliminado la lógica de registro y login interna. El sistema ahora valida cada petición mediante un token enviado en el header `X-Token`.
+*   **Verificación Firestore:** Los tokens se validan directamente contra la colección `empresas` en Firestore (campo `token`).
 *   **Vault (AES-256):** Almacenamiento encriptado de API Keys de todos los procesadores.
 
 ### 2. Base de Datos Firestore (Estructura)
+*   **`empresas`**: Colección principal para validación de acceso y tokens.
 *   `organizations`: Perfiles de clientes y configuración de branding.
 *   `vault`: Almacén seguro de credenciales.
 *   `recovery_events`: Auditoría de webhooks recibidos.
@@ -74,7 +61,7 @@ El sistema utiliza una lógica de recuperación genérica (`process_generic_reco
 
 ## Guía de Despliegue en Fly.io
 
-1.  **Configurar Secretos:** `ENCRYPTION_KEY`, `SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` y credenciales de Firebase.
+1.  **Configurar Secretos:** `ENCRYPTION_KEY`, `STRIPE_WEBHOOK_SECRET` y credenciales de Firebase.
 2.  **Desplegar:** `fly deploy`.
 
 ---
