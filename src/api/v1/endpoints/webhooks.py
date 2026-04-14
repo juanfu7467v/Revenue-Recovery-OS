@@ -1,8 +1,10 @@
+
 from fastapi import APIRouter, Request, HTTPException, Header, BackgroundTasks
 from src.database.firestore import db
 from src.config import settings
 from src.services.smart_retries import SmartRetries
 from src.services.dunning import DunningService
+from src.utils.auth import validate_plan_by_org_id
 import stripe
 from datetime import datetime, timedelta
 import json
@@ -19,6 +21,11 @@ async def process_recovery_logic(event: dict):
         
         org_id = invoice_data.get("metadata", {}).get("org_id", "default_org")
         
+        # VALIDACIÓN DE PLAN: Verificar si el plan está vigente antes de ejecutar la recuperación
+        if not await validate_plan_by_org_id(org_id):
+            print(f"Plan validation failed for organization: {org_id}. Recovery logic aborted.")
+            return
+
         # 1. Iniciar Smart Retries
         retrier = SmartRetries(invoice_id)
         await retrier.execute_retry()
@@ -69,6 +76,11 @@ async def stripe_webhook(request: Request, background_tasks: BackgroundTasks, st
         
         org_id = invoice_data.get("metadata", {}).get("org_id", "default_org")
 
+        # VALIDACIÓN DE PLAN: Antes de registrar el log de recuperación
+        if not await validate_plan_by_org_id(org_id):
+            print(f"Plan validation failed for organization: {org_id}. Event ignored.")
+            return {"status": "plan_inactive", "message": "Subscription plan is inactive or expired"}
+
         if db:
             try:
                 recovery_log = {
@@ -96,8 +108,11 @@ async def stripe_webhook(request: Request, background_tasks: BackgroundTasks, st
         obj = event["data"]["object"]
         org_id = obj.get("metadata", {}).get("org_id", "default_org")
         
+        # VALIDACIÓN DE PLAN: Antes de enviar pre-dunning
+        if not await validate_plan_by_org_id(org_id):
+            return {"status": "plan_inactive", "message": "Subscription plan is inactive or expired"}
+
         # Simulamos detección de tarjeta por vencer (basado en lógica de negocio)
-        # En una implementación real, extraeríamos datos del PaymentMethod asociado
         customer_id = obj.get("customer")
         customer_email = "cliente@ejemplo.com" # Placeholder
         card_last4 = "4242" # Placeholder

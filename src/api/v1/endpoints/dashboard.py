@@ -8,13 +8,13 @@ from src.utils.auth import get_current_user
 
 @router.get("/metrics", response_model=DashboardMetrics)
 async def get_dashboard_metrics(current_user: dict = Depends(get_current_user)):
-    user_id = current_user["user_id"]
+    org_id = current_user["org_id"]
     if not db:
         raise HTTPException(status_code=503, detail="Database connection not available. Please check Firebase configuration.")
     
     try:
         # Obtener logs de recuperación del usuario de Firestore
-        recovery_logs = db.collection("recovery_logs").where("user_id", "==", user_id).stream()
+        recovery_logs = db.collection("recovery_logs").where("org_id", "==", org_id).stream()
         
         recovered_amount = 0.0
         total_collection_days = 0

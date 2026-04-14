@@ -8,7 +8,7 @@ class DunningService:
     async def _get_branding(self):
         if not db:
             return {}
-        org_doc = db.collection("organizations").document(self.user_id).get()
+        org_doc = db.collection("empresas").document(self.user_id).get()
         if org_doc.exists:
             return org_doc.to_dict().get("branding", {})
         return {}

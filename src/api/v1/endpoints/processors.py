@@ -1,8 +1,10 @@
+
 from fastapi import APIRouter, Request, HTTPException, Header, BackgroundTasks
 from src.database.firestore import db
 from src.config import settings
 from src.services.smart_retries import SmartRetries
 from src.services.dunning import DunningService
+from src.utils.auth import validate_plan_by_org_id
 from datetime import datetime, timedelta
 import json
 
@@ -12,6 +14,11 @@ async def process_generic_recovery(processor_name: str, event_data: dict, org_id
     """
     Lógica genérica de recuperación para cualquier procesador de pago.
     """
+    # VALIDACIÓN DE PLAN: Verificar si el plan está vigente antes de ejecutar la recuperación
+    if not await validate_plan_by_org_id(org_id):
+        print(f"Plan validation failed for organization: {org_id}. Recovery logic aborted.")
+        return
+
     customer_id = event_data.get("customer_id")
     invoice_id = event_data.get("invoice_id")
     amount = event_data.get("amount")
@@ -48,41 +55,42 @@ async def process_generic_recovery(processor_name: str, event_data: dict, org_id
 async def adyen_webhook(request: Request, background_tasks: BackgroundTasks):
     """Webhook para Adyen (Empresas Grandes)"""
     payload = await request.json()
-    # Lógica de validación de Adyen aquí
     
     # Ejemplo de extracción de datos (simplificado)
     notification_items = payload.get("notificationItems", [])
     for item in notification_items:
         details = item.get("NotificationRequestItem", {})
         if details.get("eventCode") == "AUTHORISATION" and details.get("success") == "false":
+            # Nota: En una implementación real, se extraería el org_id del payload o metadatos
+            org_id = details.get("additionalData", {}).get("org_id", "default_org")
+            
             event_data = {
                 "customer_id": details.get("pspReference"),
                 "invoice_id": details.get("merchantReference"),
                 "amount": float(details.get("amount", {}).get("value", 0)) / 100,
                 "currency": details.get("amount", {}).get("currency")
             }
-            background_tasks.add_task(process_generic_recovery, "adyen", event_data)
+            background_tasks.add_task(process_generic_recovery, "adyen", event_data, org_id)
             
     return {"status": "accepted"}
 
 @router.post("/paypal-braintree")
 async def paypal_braintree_webhook(request: Request, background_tasks: BackgroundTasks):
     """Webhook para PayPal / Braintree (E-commerce)"""
-    # Braintree suele enviar datos en formato form-url-encoded para webhooks
-    # pero aquí simulamos JSON para consistencia
     payload = await request.json()
     
-    # Lógica de extracción para Braintree
     event_kind = payload.get("kind")
     if event_kind == "subscription_charge_unsuccessful":
         subscription = payload.get("subscription", {})
+        org_id = subscription.get("metadata", {}).get("org_id", "default_org")
+        
         event_data = {
             "customer_id": subscription.get("customer_id"),
             "invoice_id": subscription.get("id"),
             "amount": float(subscription.get("price", 0)),
             "currency": subscription.get("currency_iso_code")
         }
-        background_tasks.add_task(process_generic_recovery, "paypal_braintree", event_data)
+        background_tasks.add_task(process_generic_recovery, "paypal_braintree", event_data, org_id)
         
     return {"status": "ok"}
 
@@ -94,13 +102,15 @@ async def checkout_webhook(request: Request, background_tasks: BackgroundTasks):
     event_type = payload.get("type")
     if event_type == "payment_declined":
         data = payload.get("data", {})
+        org_id = data.get("metadata", {}).get("org_id", "default_org")
+        
         event_data = {
             "customer_id": data.get("customer", {}).get("id"),
             "invoice_id": data.get("reference"),
             "amount": float(data.get("amount", 0)) / 100,
             "currency": data.get("currency")
         }
-        background_tasks.add_task(process_generic_recovery, "checkout", event_data)
+        background_tasks.add_task(process_generic_recovery, "checkout", event_data, org_id)
         
     return {"status": "ok"}
 
@@ -109,20 +119,19 @@ async def mercadopago_webhook(request: Request, background_tasks: BackgroundTask
     """Webhook para Mercado Pago (Latinoamérica)"""
     payload = await request.json()
     
-    # Mercado Pago envía notificaciones de tipo 'payment' o 'subscription_preapproval'
     action = payload.get("action")
     if action == "payment.created" or action == "payment.updated":
-        # En una implementación real, se consultaría la API de MP con el ID recibido
-        # para verificar el estado 'rejected'
         payment_id = payload.get("data", {}).get("id")
-        # Simulación de datos extraídos
+        # En MP, el external_reference suele usarse para el org_id o invoice_id
+        org_id = "default_org" # Se obtendría de la API de MP usando el payment_id
+        
         event_data = {
             "customer_id": "mp_cust_123",
             "invoice_id": f"mp_pay_{payment_id}",
             "amount": 0.0, # Se obtendría de la API
             "currency": "ARS"
         }
-        background_tasks.add_task(process_generic_recovery, "mercadopago", event_data)
+        background_tasks.add_task(process_generic_recovery, "mercadopago", event_data, org_id)
         
     return {"status": "ok"}
 
@@ -133,13 +142,15 @@ async def payu_webhook(request: Request, background_tasks: BackgroundTasks):
     
     state = payload.get("state_pol")
     if state == "6": # DECLINED en PayU
+        org_id = payload.get("extra1", "default_org") # PayU usa campos extra para metadatos
+        
         event_data = {
             "customer_id": payload.get("payer_id"),
             "invoice_id": payload.get("reference_sale"),
             "amount": float(payload.get("value", 0)),
             "currency": payload.get("currency")
         }
-        background_tasks.add_task(process_generic_recovery, "payu", event_data)
+        background_tasks.add_task(process_generic_recovery, "payu", event_data, org_id)
         
     return {"status": "ok"}
 
@@ -148,15 +159,16 @@ async def kushki_niubiz_webhook(request: Request, background_tasks: BackgroundTa
     """Webhook para Kushki / Niubiz (Perú y Países Andinos)"""
     payload = await request.json()
     
-    # Kushki usa 'transaction_status'
     status = payload.get("transaction_status")
     if status == "DECLINED":
+        org_id = payload.get("metadata", {}).get("org_id", "default_org")
+        
         event_data = {
             "customer_id": payload.get("customer_id"),
             "invoice_id": payload.get("ticket_number"),
             "amount": float(payload.get("amount", 0)),
             "currency": payload.get("currency")
         }
-        background_tasks.add_task(process_generic_recovery, "kushki_niubiz", event_data)
+        background_tasks.add_task(process_generic_recovery, "kushki_niubiz", event_data, org_id)
         
     return {"status": "ok"}

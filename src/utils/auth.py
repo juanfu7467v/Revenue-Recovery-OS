@@ -2,16 +2,15 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import APIKeyHeader
 from src.database.firestore import db
+from datetime import datetime
 
-# Definir el esquema de seguridad usando un Header para el token
-# El nombre del header puede ser 'X-Token' o 'Authorization'
-# Según la instrucción "Validar cada petición usando un token", usaremos un header simple.
+# Header para el token de la empresa
 api_key_header = APIKeyHeader(name="X-Token", auto_error=False)
 
 async def get_current_user(token: str = Depends(api_key_header)):
     """
     Valida el token contra la colección 'empresas' en Firestore.
-    Busca un documento donde el campo 'token' coincida con el proporcionado.
+    Verifica también que el plan del usuario esté vigente.
     """
     if not token:
         raise HTTPException(
@@ -41,15 +40,31 @@ async def get_current_user(token: str = Depends(api_key_header)):
         empresa_doc = empresas_ref[0]
         empresa_data = empresa_doc.to_dict()
         
-        # Mantener compatibilidad con el contrato anterior: devolver user_id y org_id
-        # Usamos el ID del documento como org_id y un identificador genérico o el mismo ID como user_id
-        org_id = empresa_doc.id
-        user_id = empresa_data.get("email", f"user_{org_id}")
+        # VALIDACIÓN DE PLAN
+        # El backend debe validar el plan antes de que el sistema empiece a funcionar
+        plan_active = empresa_data.get("plan_active", False)
+        plan_expires_at = empresa_data.get("plan_expires_at")
         
+        # Si el plan no está activo o ha expirado
+        is_expired = False
+        if plan_expires_at:
+            # Firestore devuelve datetime objects
+            if datetime.utcnow() > plan_expires_at.replace(tzinfo=None):
+                is_expired = True
+        
+        if not plan_active or is_expired:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Plan inactive or expired. Please renew your subscription.",
+            )
+
+        # Retornar datos normalizados para el resto de la app
         return {
-            "user_id": user_id,
-            "org_id": org_id,
-            "company_name": empresa_data.get("nombre", "Empresa")
+            "user_id": empresa_data.get("uid"),
+            "org_id": empresa_doc.id,
+            "company_name": empresa_data.get("nombre_comercial", empresa_data.get("nombre", "Empresa")),
+            "email": empresa_data.get("email"),
+            "plan_status": "active"
         }
         
     except HTTPException:
@@ -60,3 +75,30 @@ async def get_current_user(token: str = Depends(api_key_header)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error during token validation"
         )
+
+async def validate_plan_by_org_id(org_id: str):
+    """
+    Utilidad para validar el plan directamente por org_id (usado en webhooks).
+    """
+    if not db:
+        return False
+        
+    try:
+        doc = db.collection("empresas").document(org_id).get()
+        if not doc.exists:
+            return False
+            
+        data = doc.to_dict()
+        plan_active = data.get("plan_active", False)
+        plan_expires_at = data.get("plan_expires_at")
+        
+        if not plan_active:
+            return False
+            
+        if plan_expires_at and datetime.utcnow() > plan_expires_at.replace(tzinfo=None):
+            return False
+            
+        return True
+    except Exception as e:
+        print(f"Error validating plan for org {org_id}: {e}")
+        return False
