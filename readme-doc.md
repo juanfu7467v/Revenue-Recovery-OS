@@ -1,6 +1,6 @@
 # Documentación Técnica del API para el Panel de Control de Revenue-Recovery-OS
 
-Esta documentación detalla los endpoints del API necesarios para el desarrollo de la interfaz de usuario del Panel de Control de Revenue-Recovery-OS. Se enfoca en el nuevo sistema de validación por token, la especificación de endpoints por pantalla, el manejo seguro de claves API y la gestión de webhooks, incluyendo las integraciones con diversos procesadores de pago.
+Esta documentación detalla los endpoints del API necesarios para el desarrollo de la interfaz de usuario del Panel de Control de Revenue-Recovery-OS. Se enfoca en el nuevo sistema de validación por token, la especificación de endpoints por pantalla, el manejo seguro de claves API y la gestión de webhooks, incluyendo las integraciones con diversos procesadores de pago y las nuevas funcionalidades avanzadas.
 
 ## 1. Sistema de Validación por Token
 
@@ -129,9 +129,67 @@ Actualiza la configuración de branding de la organización. Requiere validació
 }
 ```
 
-### 3.3. Webhooks de Procesadores de Pago
+## 4. Nuevas Funcionalidades Avanzadas
 
-Estos endpoints están diseñados para recibir notificaciones de eventos de pago fallidos de los respectivos procesadores. Todos ellos activan una lógica genérica de recuperación (`process_generic_recovery`) que inicia reintentos inteligentes y campañas de dunning.
+### 4.1. Inteligencia Predictiva (Pre-Dunning Avanzado)
+
+El sistema incorpora capacidades de inteligencia artificial utilizando Google GenAI (Gemini) para optimizar el proceso de recuperación y predecir comportamientos del cliente.
+
+*   **Análisis de Cancelación (Churn)**: Identifica clientes con alta probabilidad de cancelar basándose en el historial de pagos fallidos. Esto permite acciones proactivas para retenerlos.
+*   **Horarios Óptimos de Cobro**: Determina el mejor día y hora para reintentar un cobro, considerando factores como el país del cliente y el procesador de pago, maximizando las tasas de éxito.
+
+Estas funcionalidades se integran en la lógica de `process_generic_recovery` y `SmartRetries` a través del servicio `RecoveryScoring`.
+
+### 4.2. Recuperación Multicanal
+
+Para asegurar la máxima efectividad en la comunicación con el cliente, el sistema ahora soporta múltiples canales de contacto, gestionados por el `DunningService`:
+
+*   **WhatsApp Business API (vía Twilio)**: Envío automático de recordatorios de pago y enlaces al portal de autogestión directamente al celular del cliente.
+*   **SMS (vía Twilio)**: Proporciona un canal de comunicación robusto para países con menor acceso a internet o como respaldo para WhatsApp.
+*   **Correo Electrónico (vía Resend)**: Notificaciones y seguimiento profesional con plantillas personalizables y enlaces directos al portal de pago.
+
+### 4.3. Portal de Pago del Cliente (Autogestión)
+
+Se ha implementado un portal seguro y personalizado (`PaymentPortalService`) donde los clientes pueden actualizar su método de pago de forma sencilla, reduciendo la fricción y mejorando la tasa de recuperación.
+
+**Endpoint para Generar Enlace (Interno):** `PaymentPortalService.generate_portal_link(customer_id, invoice_id, amount)`
+
+Genera un enlace único y seguro para el portal de pago del cliente, con un token que expira en 24 horas.
+
+**Endpoint para Validar Token (Interno):** `PaymentPortalService.validate_portal_token(token)`
+
+Valida el token del portal de pago, verificando su vigencia y uso.
+
+**Endpoint para Actualizar Método de Pago (Interno):** `PaymentPortalService.update_payment_method(token, payment_method_data)`
+
+Permite al cliente actualizar su información de pago de forma segura. Los datos sensibles se encriptan antes de ser almacenados.
+
+### 4.4. Reportes Automáticos
+
+El sistema puede generar automáticamente reportes mensuales en formato PDF, proporcionando una visión clara y concisa del rendimiento de la recuperación de ingresos, ideal para presentaciones gerenciales.
+
+**Servicio:** `ReportGenerator`
+
+**Funcionalidad:** `ReportGenerator.generate_monthly_report()` genera un PDF con métricas clave como dinero recuperado, tasa de éxito y recomendaciones. `ReportGenerator.send_report_email(recipient_email, report_bytes)` envía el reporte por correo electrónico.
+
+### 4.5. Integración con CRM y Contabilidad
+
+Para una gestión empresarial integral, el sistema se integra con plataformas clave a través del servicio `ExternalIntegrations`:
+
+*   **Webhooks de Salida (CRM)**: Notifica automáticamente a sistemas CRM como Salesforce, HubSpot o Zoho cuando un pago es recuperado, manteniendo los registros de clientes actualizados.
+*   **Sincronización Contable**: Integra con software contable como QuickBooks o Xero para marcar facturas como pagadas automáticamente, agilizando los procesos financieros.
+
+### 4.6. Gestión de Disputas (Chargebacks)
+
+Un nuevo módulo (`DisputeManager`) ayuda a gestionar y responder a contracargos de forma eficiente, aumentando las probabilidades de ganar las disputas. Utiliza Google GenAI para generar respuestas automáticas basadas en la evidencia disponible.
+
+**Servicio:** `DisputeManager`
+
+**Funcionalidad:** `DisputeManager.generate_dispute_response(dispute_id)` recolecta evidencia y genera una respuesta persuasiva para el contracargo utilizando IA.
+
+## 5. Webhooks de Procesadores de Pago (Actualizado)
+
+Estos endpoints están diseñados para recibir notificaciones de eventos de pago fallidos de los respectivos procesadores. Todos ellos activan una lógica genérica de recuperación (`process_generic_recovery`) que ahora incluye **análisis predictivo con IA** para el scoring de recuperación y **dispara campañas de dunning multicanal**.
 
 **Endpoint:** `POST /api/v1/webhooks/stripe`
 
@@ -327,7 +385,7 @@ El payload de notificación de Kushki/Niubiz. Ejemplo para una transacción decl
 }
 ```
 
-## 4. Manejo de Errores
+## 6. Manejo de Errores
 
 El API utiliza códigos de estado HTTP estándar:
 
